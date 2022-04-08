@@ -32,6 +32,8 @@
 
 - 박준용
 
+## 개발 문서
+[Notion](https://dev-junyong.notion.site/PJT-df2dbc6ff2c94d72920357d165196d1e)
 
 
 ## 개발 환경
