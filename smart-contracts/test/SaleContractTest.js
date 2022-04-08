@@ -1,58 +1,125 @@
-/**
- *  PJT Ⅲ - Req.1-SC3) 시나리오 테스트
- */
 const SsafyToken = artifacts.require("SsafyToken");
-const SsafyNFT = artifacts.require("SsafyNFT");
+const NFTIslandBadge = artifacts.require("NFTIslandBadge");
 const SaleFactory = artifacts.require("SaleFactory");
 const Sale = artifacts.require("Sale");
-let ssafyTokenContract, salesFactoryContract, nftContract, salesContract;
+let ssafyTokenContract, saleFactoryContract, nftContract;
+// let saleContract;
 let itemId = 0;
 
 contract("Sale Contract Testing", (accounts) => {
-    const mintAmount = 10000;
-    const uri = "testURI";
+  const contractOwner = accounts[3];
+  const seller = accounts[4];
+  const purchaser = accounts[5];
 
-    async function print(title) {
-        const seller = accounts[0];
-        const bidder1 = accounts[1];
-        const bidder2 = accounts[2];
-        console.log(`\n--------------------  ${title} --------------------`);
-        console.log(`Seller: ${seller} ${await getBalance(seller)}`);
-        console.log(`Bidder1: ${bidder1} ${await getBalance(bidder1)}`);
-        console.log(`Bidder2: ${bidder2} ${await getBalance(bidder2)}\n`);
-    }
+  const uri = "testURI";
+  const price = 100;
+  const initPurchaserBalance = 100;
 
-    it("Bid and confirm", async () => {
-        const seller = accounts[0];
-        const bidder1 = accounts[1];
-        const bidder2 = accounts[2]; // purchaser
+  async function printBalance() {
+    var sellerBalance = await ssafyTokenContract.balanceOf.call(seller);
+    var purchaserBalance = await ssafyTokenContract.balanceOf.call(purchaser);
 
-        // TODO
-        // 다음을 테스트를 통과해야합니다.
-        // assert.equal(bidder2, await getNftOwner(), "Confirm Failed");
-        // assert.equal(1000, await getBalance(bidder1), "Refund Failed");
+    console.log("------------------------------");
+    console.log("seller: " + sellerBalance);
+    console.log("purchaser: " + purchaserBalance);
+    console.log("------------------------------");
+  }
+
+  async function createSale() {
+    // ssafyTokenContract = await SsafyToken.new("SsafyToken", "SSF", 18, {
+    //   from: contractOwner,
+    // });
+
+    // await ssafyTokenContract.mint(10000, { from: contractOwner });
+    // await ssafyTokenContract.forceToTransfer(
+    //   contractOwner,
+    //   purchaser,
+    //   initPurchaserBalance,
+    //   {
+    //     from: contractOwner,
+    //   }
+    // );
+
+    nftContract = await NFTIslandBadge.new(
+      "Non Fungible Token For NFTIsland",
+      "BADGE",
+      {
+        from: contractOwner,
+      }
+    );
+
+    saleFactoryContract = await SaleFactory.new(nftContract.address, {
+      from: contractOwner,
     });
 
-    it("Bid and Purchase", async () => {
-        const seller = accounts[0];
-        const bidder = accounts[1];
-        const purchaser = accounts[2];
-
-        // TODO
-        // 다음을 테스트를 통과해야합니다.
-        // assert.equal(purchaser, await getNftOwner(), "Not Owned By Purchaser");
-        // assert.equal(1000, await getBalance(bidder), "Refund Failed");
-        // assert.equal(900, await getBalance(purchaser), "Transfer Failed");
+    await nftContract.setSaleFactoryAddress(saleFactoryContract.address, {
+      from: contractOwner,
     });
 
-    it("Bid and Cancel", async () => {
-        const seller = accounts[0];
-        const bidder = accounts[1];
+    await nftContract.create(seller, uri, true, 1, { from: seller });
 
-        // TODO
-        // 다음을 테스트를 통과해야합니다.
-        // assert.equal(seller, await getNftOwner(), "Cancellation Failed");
-        // assert.equal(1000, await getBalance(bidder), "Refund Failed");
-    });
+    await saleFactoryContract.createSale(
+      itemId,
+      price,
+      // ssafyTokenContract.address,
+      nftContract.address,
+      {
+        from: seller,
+      }
+    );
 
+    var sales = await saleFactoryContract.allSales();
+    saleContract = await Sale.at(sales[0]);
+
+    // await nftContract.transferFrom(seller, saleContract.address, itemId, {
+    //   from: seller,
+    // });
+  }
+
+  it("Create Sale", async () => {
+    await createSale();
+
+    var saleInfo = await saleContract.getSaleInfo.call();
+
+    assert.equal(
+      itemId,
+      saleInfo["1"].toNumber(),
+      "itemId in SaleInfo is not correct"
+    );
+
+    // assert.equal(
+    //   nftContract.address,
+    //   saleInfo["3"],
+    //   "nft-address in SaleInfo is not correct"
+    // );
+  });
+
+  it("Purchase", async () => {
+    await createSale();
+
+    // await ssafyTokenContract.approve(saleContract.address, 100000, {
+    //   from: purchaser,
+    // });
+
+    await saleContract.purchase({ from: purchaser, value: price });
+
+    var owner = await nftContract.ownerOf.call(itemId);
+    // var purchaserBalance = await ssafyTokenContract.balanceOf.call(purchaser);
+
+    assert.equal(purchaser, owner, "Not Owned By Purchaser");
+    // assert.equal(
+    //   initPurchaserBalance - price,
+    //   purchaserBalance,
+    //   "Transfer Failed"
+    // );
+  });
+
+  it("Cancel", async () => {
+    await createSale();
+
+    await saleContract.cancelSale({ from: seller });
+
+    var owner = await nftContract.ownerOf.call(itemId);
+    assert.equal(seller, owner, "Cancellation Failed");
+  });
 });
